@@ -8,7 +8,7 @@
  * 注意：页面立即渲染，不依赖后端 API。
  */
 import { useState, useEffect, useCallback } from 'react'
-import { Play, StopCircle, RefreshCw, CheckCircle2, XCircle, Loader2, Wrench, Download, AlertTriangle, Check, Info } from 'lucide-react'
+import { Play, RefreshCw, CheckCircle2, XCircle, Loader2, Wrench, Download, AlertTriangle, Check, Info } from 'lucide-react'
 import { api } from '@/lib/api'
 
 type Tab = 'startup' | 'config' | 'update'
@@ -33,7 +33,6 @@ function StartupTab() {
   })
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [startPending, setStartPending] = useState(false)
-  const [stopPending, setStopPending] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -75,22 +74,9 @@ function StartupTab() {
     }
   }
 
-  const handleStop = async () => {
-    setStopPending(true)
-    setErrorMsg(null)
-    try {
-      await api.stopGateway()
-      await fetchStatus()
-    } catch (err) {
-      setErrorMsg(`停止失败: ${err instanceof Error ? err.message : '未知错误'}`)
-    } finally {
-      setStopPending(false)
-    }
-  }
-
   const isRunning = status.running
   const pid = status.pid
-  const isLoading = startPending || stopPending
+  const isLoading = startPending
 
   return (
     <div className="space-y-6">
@@ -133,10 +119,7 @@ function StartupTab() {
           className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-medium ${isRunning || isLoading ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>
           {startPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}启动后端
         </button>
-        <button onClick={handleStop} disabled={!isRunning || isLoading}
-          className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-medium ${!isRunning || isLoading ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}>
-          {stopPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}停止后端
-        </button>
+
         <button onClick={fetchStatus} disabled={isLoading}
           className="flex items-center gap-2 rounded border border-border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50">
           <RefreshCw className={`h-4 w-4 ${loadState === 'loading' ? 'animate-spin' : ''}`} />刷新状态
