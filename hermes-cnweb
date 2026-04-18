@@ -1,0 +1,22 @@
+#!/bin/bash
+cd "$(dirname "$0")"
+
+case "$1" in
+start)
+  echo "🚀 启动 hermes-cn-webui..."
+  npm run dev:all
+  ;;
+stop)
+  echo "⏹  停止 hermes-cn-webui..."
+  ./scripts/stop-all.sh
+  ;;
+restart)
+  echo "🔄 重启 hermes-cn-webui..."
+  ./scripts/stop-all.sh
+  sleep 1
+  npm run dev:all
+  ;;
+*)
+  echo "用法: hermes-cnweb [start|stop|restart]"
+  ;;
+esac
