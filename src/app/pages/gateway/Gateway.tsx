@@ -366,8 +366,25 @@ function QrLoginModal({
           {/* ── Pending / Scaned (QR displayed, polling) ── */}
           {(status === 'pending' || status === 'scaned') && (
             <>
-              {/* QR image */}
-              {platform === 'weixin' && weixinQrValue ? (
+              {/* QR image / Direct link */}
+              {platform === 'weixin' && qrcodeImg ? (
+                <div className="space-y-3">
+                  <a
+                    href={qrcodeImg}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mx-auto flex h-56 w-56 items-center justify-center rounded-lg border-2 border-green-500 bg-green-50 hover:bg-green-100 transition-colors"
+                  >
+                    <div className="text-center">
+                      <QrCode className="mx-auto h-16 w-16 text-green-600" />
+                      <p className="mt-2 text-sm font-medium text-green-700">点击跳转到微信</p>
+                    </div>
+                  </a>
+                  <p className="text-center text-xs text-muted-foreground">
+                    或复制链接：<code className="text-xs text-blue-500 break-all">{qrcodeImg}</code>
+                  </p>
+                </div>
+              ) : platform === 'weixin' && weixinQrValue ? (
                 <WeixinQrCanvas value={weixinQrValue} />
               ) : feishuUrl ? (
                 <FeishuQrCanvas url={feishuUrl} />
