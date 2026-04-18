@@ -119,6 +119,22 @@ cp .env.example .env
 
 ## 辅助脚本
 
+### 全局命令（推荐）
+
+将项目根目录的 `hermes-cnweb` 链接到 PATH，即可全局使用：
+
+```bash
+# 链接全局命令（只需执行一次）
+ln -sf ~/Desktop/hermes-cn-webui/hermes-cnweb /usr/local/bin/hermes-cnweb
+
+# 使用方式（在任意目录下）
+hermes-cnweb start    # 启动前端 3000 + 后端 3001
+hermes-cnweb stop     # 停止所有服务
+hermes-cnweb restart  # 重启所有服务
+```
+
+### 传统脚本
+
 ```bash
 # 一键启动/停止/重启（前后端）
 ./scripts/start-all.sh    # 启动前端 3000 + 后端 3001
