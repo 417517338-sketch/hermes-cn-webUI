@@ -367,14 +367,14 @@ function QrLoginModal({
           {(status === 'pending' || status === 'scaned') && (
             <>
               {/* QR image */}
-              {platform === 'weixin' && weixinQrValue ? (
-                <WeixinQrCanvas value={weixinQrValue} />
-              ) : qrcodeImg ? (
+              {qrcodeImg ? (
                 <img
                   src={qrcodeImg}
                   alt={`${platformLabel}二维码`}
                   className="mx-auto max-w-56 rounded-lg border"
                 />
+              ) : platform === 'weixin' && weixinQrValue ? (
+                <WeixinQrCanvas value={weixinQrValue} />
               ) : feishuUrl ? (
                 <FeishuQrCanvas url={feishuUrl} />
               ) : (
