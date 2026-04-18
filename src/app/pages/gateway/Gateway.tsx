@@ -186,7 +186,6 @@ function QrLoginModal({
   }, [])
 
   const startPolling = useCallback(() => {
-    console.log('[WeChat QR] startPolling called')
     clearPoll()
     pollTimerRef.current = setInterval(async () => {
       if (isFetchingRef.current) return
@@ -194,9 +193,7 @@ function QrLoginModal({
       try {
         const fn = platform === 'weixin' ? weixinQrStatus : feishuQrStatus
         const result = await fn()
-        console.log('[WeChat QR] Poll result:', result)
         if (result.status === 'confirmed') {
-          console.log('[WeChat QR] Confirmed! Credentials:', result.credentials)
           setStatus('confirmed')
           clearPoll()
           if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
@@ -240,9 +237,7 @@ function QrLoginModal({
 
     try {
       if (platform === 'weixin') {
-        console.log('[WeChat QR] Calling weixinQrStart...')
         const result = await weixinQrStart()
-        console.log('[WeChat QR] Start result:', result)
         if (!result.success) {
           setStatus('error')
           setError(result.error || '获取二维码失败')
@@ -252,7 +247,6 @@ function QrLoginModal({
         setWeixinQrValue(result.qrcode || null)
         setStatus('pending')
         startCountdown(480) // WeChat QR expires in 480s
-        console.log('[WeChat QR] Starting poll...')
         startPolling()
       } else {
         const result = await feishuQrStart()
