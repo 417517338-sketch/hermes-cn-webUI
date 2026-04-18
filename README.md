@@ -121,17 +121,31 @@ cp .env.example .env
 
 ### 全局命令（推荐）
 
-将项目根目录的 `hermes-cnweb` 链接到 PATH，即可全局使用：
+项目提供了两个版本的跨平台脚本：
+
+#### Node.js 版本（推荐，跨平台）
 
 ```bash
-# 链接全局命令（只需执行一次）
-ln -sf ~/Desktop/hermes-cn-webui/hermes-cnweb /usr/local/bin/hermes-cnweb
+# 方式1: 直接运行
+node hermes-cnweb.js start
 
-# 使用方式（在任意目录下）
+# 方式2: 链接为全局命令（推荐）
+ln -sf ~/path/to/hermes-cn-webui/hermes-cnweb.js /usr/local/bin/hermes-cnweb
 hermes-cnweb start    # 启动前端 3000 + 后端 3001
 hermes-cnweb stop     # 停止所有服务
 hermes-cnweb restart  # 重启所有服务
 ```
+
+#### Bash 版本（仅 macOS/Linux）
+
+```bash
+# 仅 macOS/Linux 可用
+./hermes-cnweb start
+```
+
+#### Windows 用户
+
+Windows 可使用 Node.js 版本，或在 Git Bash / WSL 环境中使用 Bash 版本。
 
 ### 传统脚本
 
