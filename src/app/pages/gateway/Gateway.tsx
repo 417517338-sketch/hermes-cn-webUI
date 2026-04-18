@@ -193,7 +193,9 @@ function QrLoginModal({
       try {
         const fn = platform === 'weixin' ? weixinQrStatus : feishuQrStatus
         const result = await fn()
+        console.log('[WeChat QR] Poll result:', result)
         if (result.status === 'confirmed') {
+          console.log('[WeChat QR] Confirmed! Credentials:', result.credentials)
           setStatus('confirmed')
           clearPoll()
           if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
