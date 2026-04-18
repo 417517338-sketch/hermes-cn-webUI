@@ -9,8 +9,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Send, Square, Command, Copy, Check, Trash2,
-  Download, Sparkles, GitBranch, Zap,
-  Plus, X, ChevronRight, Bot, User, Paperclip, XCircle,
+  Download, Sparkles, Zap, ChevronRight,
+  Bot, User, Paperclip, XCircle, X,
   ToggleLeft, ToggleRight
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -38,7 +38,6 @@ interface Message {
   tool_calls?: Array<{ id: string; name: string; args: unknown }>
   name?: string
   isComplete?: boolean
-  branchId?: string
   attachments?: Attachment[]
 }
 
@@ -49,11 +48,6 @@ interface SlashCommand {
   isAdvanced?: boolean
   icon?: React.ReactNode
   action: () => void
-}
-
-interface Branch {
-  id: string
-  name: string
 }
 
 interface ModelOption {
@@ -105,9 +99,6 @@ const MODE_INFO = {
     color: '#cba6f7',
   },
 }
-
-/** 默认分支 */
-const DEFAULT_BRANCHES: Branch[] = [{ id: 'main', name: '主分支' }]
 
 /** 最大 token 使用量 */
 const MAX_TOKEN = 128000
@@ -518,6 +509,14 @@ export function Chat(props: {
   onNewTab?: () => void
   onSwitchTab?: (tabId: string) => void
   onCloseTab?: (tabId: string) => void
+  availablePlatforms?: Array<{
+    id: string
+    source: string
+    user_id: string
+    title: string
+    started_at: string
+    recent_count: number
+  }>
 }) {
   const {
     tabId = 'default',
@@ -527,6 +526,7 @@ export function Chat(props: {
     onNewTab,
     onSwitchTab,
     onCloseTab,
+    availablePlatforms = [],
   } = props
 
   // -------------------------------------------------------------------------
@@ -534,9 +534,6 @@ export function Chat(props: {
   // -------------------------------------------------------------------------
   const messagesKey = useMemo(() => `hermes_chat_messages_${tabId}`, [tabId])
   const inputKey = useMemo(() => `hermes_chat_input_${tabId}`, [tabId])
-  const branchesKey = useMemo(() => `hermes_chat_branches_${tabId}`, [tabId])
-  const currentBranchKey = useMemo(() => `hermes_chat_current_branch_${tabId}`, [tabId])
-
   // -------------------------------------------------------------------------
   // 服务端状态 (useQuery)
   // -------------------------------------------------------------------------
@@ -550,27 +547,18 @@ export function Chat(props: {
   // 客户端状态 (useState)
   // -------------------------------------------------------------------------
 
-  /** 消息列表（按分支组织） */
-  const [messages, setMessages] = useState<Record<string, Message[]>>(() => {
+  /** 消息列表 */
+  const [messages, setMessages] = useState<Message[]>(() => {
     try {
       const saved = localStorage.getItem(messagesKey)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          return parsed as Record<string, Message[]>
+        if (Array.isArray(parsed)) {
+          return parsed as Message[]
         }
       }
     } catch { /* ignore */ }
-    return { main: [] }
-  })
-
-  /** 当前分支 ID */
-  const [currentBranch, setCurrentBranch] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(currentBranchKey)
-      if (saved) return saved
-    } catch { /* ignore */ }
-    return 'main'
+    return []
   })
 
   /** 输入框内容 */
@@ -593,15 +581,9 @@ export function Chat(props: {
   /** 斜杠命令选中索引 */
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0)
 
-  /** 分支列表 */
-  const [branches, setBranches] = useState<Branch[]>(() => {
-    try {
-      const saved = localStorage.getItem(branchesKey)
-      if (saved) return JSON.parse(saved)
-    } catch { /* ignore */ }
-    return DEFAULT_BRANCHES
-  })
-
+  // -------------------------------------------------------------------------
+  // 平台标签页消息查询（仅 platformTab 模式）
+  // -------------------------------------------------------------------------
   /** Token 使用量 */
   const [tokenUsage, setTokenUsage] = useState({ used: 0, max: MAX_TOKEN })
 
@@ -635,8 +617,8 @@ export function Chat(props: {
 
   const tokenPercent = Math.min((tokenUsage.used / tokenUsage.max) * 100, 100)
 
-  /** 当前分支的消息 */
-  const currentMessages = messages[currentBranch] ?? []
+  /** 当前消息列表 */
+  const currentMessages = messages
 
   /** 合并后的所有命令列表 */
   const allCommands = SLASH_COMMANDS
@@ -662,16 +644,6 @@ export function Chat(props: {
     try { localStorage.setItem(inputKey, input) } catch {}
   }, [input, inputKey])
 
-  /** 持久化分支列表 */
-  useEffect(() => {
-    try { localStorage.setItem(branchesKey, JSON.stringify(branches)) } catch {}
-  }, [branches, branchesKey])
-
-  /** 持久化当前分支 ID */
-  useEffect(() => {
-    try { localStorage.setItem(currentBranchKey, currentBranch) } catch {}
-  }, [currentBranch, currentBranchKey])
-
   /** 当 tab 变为非激活时，清空输入框 */
   useEffect(() => {
     if (!isActive) setInput('')
@@ -682,7 +654,7 @@ export function Chat(props: {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  useEffect(() => { scrollToBottom() }, [messages, currentBranch, scrollToBottom])
+  useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
 
   /** 自动调整 textarea 高度 */
   useEffect(() => {
@@ -743,37 +715,7 @@ export function Chat(props: {
 
   /** 清空对话 */
   const handleClearChat = () => {
-    setMessages({ main: [] })
-    setBranches(DEFAULT_BRANCHES)
-    setCurrentBranch('main')
-  }
-
-  /** 切换分支 */
-  const handleSwitchBranch = (branchId: string) => {
-    if (branchId === currentBranch) return
-    setCurrentBranch(branchId)
-  }
-
-  /** 删除分支（主分支不可删除） */
-  const handleDeleteBranch = (branchId: string) => {
-    if (branchId === 'main') return
-    const newBranches = branches.filter((b) => b.id !== branchId)
-    const newMessages = { ...messages }
-    delete newMessages[branchId]
-    setBranches(newBranches)
-    setMessages(newMessages)
-    if (currentBranch === branchId) {
-      setCurrentBranch('main')
-    }
-  }
-
-  /** 从当前消息节点创建新分支 */
-  const handleCreateBranch = () => {
-    const newBranchId = `branch_${Date.now()}`
-    const newBranchName = `分支 ${branches.length + 1}`
-    setMessages((prev) => ({ ...prev, [newBranchId]: [...(prev[currentBranch] ?? [])] }))
-    setBranches((prev) => [...prev, { id: newBranchId, name: newBranchName }])
-    setCurrentBranch(newBranchId)
+    setMessages([])
   }
 
   /** 输入框变化处理 */
@@ -825,7 +767,7 @@ export function Chat(props: {
   const executeSlashCommand = (cmd: SlashCommand) => {
     switch (cmd.id) {
       case 'clear':
-        setMessages((prev) => ({ ...prev, [currentBranch]: [] }))
+        setMessages([])
         break
       case 'help':
         setInput('/help — 显示帮助\n/list — 列出所有命令\n/model [模型名] — 切换模型\n/tools — 显示可用工具\n/session — 管理会话\n/clear — 清空对话')
@@ -929,12 +871,11 @@ export function Chat(props: {
       id: `user_${Date.now()}`,
       role: 'user',
       content: fullContent,
-      branchId: currentBranch,
       attachments: attachments.length > 0 ? [...attachments] : undefined,
     }
     const newMessagesList = [...currentMessages, userMessage]
 
-    setMessages((prev) => ({ ...prev, [currentBranch]: newMessagesList }))
+    setMessages(newMessagesList)
     setInput('')
     setIsStreaming(true)
     abortControllerRef.current = new AbortController()
@@ -959,12 +900,12 @@ export function Chat(props: {
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
-      let assistantMessage: Message = { id: `assistant_${Date.now()}`, role: 'assistant', content: '', isComplete: false, branchId: currentBranch }
+      let assistantMessage: Message = { id: `assistant_${Date.now()}`, role: 'assistant', content: '', isComplete: false }
       let hasSeenToolCalls = false
       let hasSeenContent = false
 
       setBotStatus('thinking')
-      setMessages((prev) => ({ ...prev, [currentBranch]: [...(prev[currentBranch] ?? []), assistantMessage] }))
+      setMessages((prev) => [...prev, assistantMessage])
 
       if (reader) {
         let streamDone = false
@@ -1012,11 +953,10 @@ export function Chat(props: {
               if (parsed.content) {
                 assistantMessage = { ...assistantMessage, content: assistantMessage.content + parsed.content }
                 setMessages((prev) => {
-                  const branchMsgs = prev[currentBranch] ?? []
-                  const updated = [...branchMsgs]
+                  const updated = [...prev]
                   const lastIndex = updated.length - 1
                   if (lastIndex >= 0 && updated[lastIndex].id === assistantMessage.id) updated[lastIndex] = { ...assistantMessage }
-                  return { ...prev, [currentBranch]: updated }
+                  return updated
                 })
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
               }
@@ -1024,11 +964,10 @@ export function Chat(props: {
                 if (!hasSeenToolCalls) { setBotStatus('calling_tool'); hasSeenToolCalls = true }
                 assistantMessage = { ...assistantMessage, tool_calls: parsed.tool_calls }
                 setMessages((prev) => {
-                  const branchMsgs = prev[currentBranch] ?? []
-                  const updated = [...branchMsgs]
+                  const updated = [...prev]
                   const lastIndex = updated.length - 1
                   if (lastIndex >= 0 && updated[lastIndex].id === assistantMessage.id) updated[lastIndex] = { ...assistantMessage }
-                  return { ...prev, [currentBranch]: updated }
+                  return updated
                 })
               }
               if (parsed.usage) {
@@ -1037,6 +976,16 @@ export function Chat(props: {
                   used: parsed.usage.total_tokens || 0,
                 }))
               }
+              // 处理服务端返回的错误信息
+              if (parsed.error) {
+                assistantMessage = {
+                  ...assistantMessage,
+                  content: `⚠️ ${parsed.error}`,
+                  isComplete: true,
+                }
+                streamDone = true
+                break
+              }
             } catch { /* ignore parse errors */ }
           }
         }
@@ -1044,24 +993,20 @@ export function Chat(props: {
 
       assistantMessage.isComplete = true
       setMessages((prev) => {
-        const branchMsgs = prev[currentBranch] ?? []
-        const updated = [...branchMsgs]
+        const updated = [...prev]
         const lastIndex = updated.length - 1
         if (lastIndex >= 0 && updated[lastIndex].id === assistantMessage.id) updated[lastIndex] = { ...assistantMessage }
-        return { ...prev, [currentBranch]: updated }
+        return updated
       })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         console.log('Stream aborted by user')
       } else {
         console.error('Chat error:', error)
-        setMessages((prev) => ({
+        setMessages((prev) => [
           ...prev,
-          [currentBranch]: [
-            ...(prev[currentBranch] ?? []),
-            { id: `error_${Date.now()}`, role: 'assistant', content: '抱歉，发生了错误。请稍后重试。', isComplete: true },
-          ],
-        }))
+          { id: `error_${Date.now()}`, role: 'assistant', content: '抱歉，发生了错误。请稍后重试。', isComplete: true },
+        ])
       }
     } finally {
       setIsStreaming(false)
@@ -1105,21 +1050,25 @@ export function Chat(props: {
             )}
           </button>
 
-          {/* 模型选择器 */}
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="rounded-lg border px-3 py-1.5 text-sm transition-colors hover:border-opacity-80"
+          {/* 模型信息（只读） */}
+          <div
+            className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
             style={{
               backgroundColor: COLORS.surface,
               borderColor: COLORS.border,
               color: COLORS.text,
             }}
+            title="当前模型（不可切换）"
           >
-            {modelsData?.quick_selection?.map((model) => (
-              <option key={model.id} value={model.id}>{model.name}</option>
-            )) ?? <option value={selectedModel || 'MiniMax-M2.7-highspeed'}>{selectedModel || 'MiniMax-M2.7-highspeed'}</option>}
-          </select>
+            <Bot className="h-3.5 w-3.5" style={{ color: COLORS.purple }} />
+            <span className="font-medium">
+              {modelsData?.current?.model || selectedModel || 'MiniMax-M2.7-highspeed'}
+            </span>
+            <span style={{ color: COLORS.muted }}>·</span>
+            <span style={{ color: COLORS.muted, fontSize: '0.75rem' }}>
+              {modelsData?.current?.provider || 'MiniMax'}
+            </span>
+          </div>
 
           {/* Token 进度条 */}
           <TokenProgressBar used={tokenUsage.used} max={tokenUsage.max} />
@@ -1201,49 +1150,13 @@ export function Chat(props: {
         </div>
       </div>
 
-      {/* 分支标签页 */}
-      <div className="mb-4 flex items-center gap-2 overflow-x-auto">
-        {branches.map((branch) => (
-          <div
-            key={branch.id}
-            onClick={() => handleSwitchBranch(branch.id)}
-            className="group flex items-center gap-2 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-all duration-150 cursor-pointer"
-            style={{
-              backgroundColor: branch.id === currentBranch ? COLORS.surface : 'transparent',
-              color: branch.id === currentBranch ? COLORS.text : COLORS.muted,
-              border: `1px solid ${branch.id === currentBranch ? COLORS.purple : COLORS.border}`,
-            }}
-          >
-            <GitBranch className="h-4 w-4 flex-shrink-0" />
-            <span>{branch.name}</span>
-            {branch.id !== 'main' && (
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDeleteBranch(branch.id) }}
-                className="ml-1 rounded-lg p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ color: COLORS.red, backgroundColor: 'rgba(243, 139, 168, 0.1)' }}
-                title="删除分支"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        ))}
-        <button
-          onClick={handleCreateBranch}
-          className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm"
-          style={{ color: COLORS.muted }}
-          title="新建分支"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
-
       {/* 消息区域 */}
       <div
         className="flex-1 overflow-y-auto rounded-xl border"
         style={{ backgroundColor: COLORS.background, borderColor: COLORS.border }}
       >
         <div className="mx-auto flex h-full flex-col p-2" style={{ maxWidth: '90%' }}>
+          {/* 空状态提示 */}
           {currentMessages.length === 0 && (
             <div
               className="flex h-full flex-col items-center justify-center rounded-xl"
@@ -1260,6 +1173,7 @@ export function Chat(props: {
             </div>
           )}
 
+          {/* 消息列表 */}
           {currentMessages.length > 0 && (
             <div className="space-y-3">
               {currentMessages.map((msg) => {
@@ -1319,23 +1233,23 @@ export function Chat(props: {
 
           <div className="flex items-end gap-2">
             <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            onCompositionEnd={handleCompositionEnd}
-            onCompositionStart={handleCompositionStart}
-            placeholder="输入消息... (Enter 发送, Shift+Enter 换行, / 打开命令)"
-            className="w-full resize-none rounded-xl border p-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2"
-            style={{
-              backgroundColor: COLORS.surface,
-              borderColor: COLORS.border,
-              color: COLORS.text,
-              maxHeight: '30vh',
-            }}
-            rows={3}
-            disabled={isStreaming}
-          />
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onCompositionEnd={handleCompositionEnd}
+              onCompositionStart={handleCompositionStart}
+              placeholder="输入消息... (Enter 发送, Shift+Enter 换行, / 打开命令)"
+              className="w-full resize-none rounded-xl border p-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: COLORS.surface,
+                borderColor: COLORS.border,
+                color: COLORS.text,
+                maxHeight: '30vh',
+              }}
+              rows={3}
+              disabled={isStreaming}
+            />
           </div>
           {showSlashPanel && filteredSlashCommands.length > 0 && (
             <SlashPanel
@@ -1349,7 +1263,7 @@ export function Chat(props: {
 
         {/* 按钮组：靠右对齐 */}
         <div className="flex flex-col items-center gap-2">
-          {/* 附件 + 语音 横排 */}
+          {/* 附件按钮 */}
           <div className="flex flex-row items-center gap-2" style={{ minWidth: '88px' }}>
             <button
               onClick={() => fileInputRef.current?.click()}

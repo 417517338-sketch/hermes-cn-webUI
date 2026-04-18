@@ -37,7 +37,6 @@ const navItems = [
   { to: '/terminal', icon: Terminal, label: '终端界面' },
   { to: '/gateway', icon: Share2, label: '消息网关' },
   { to: '/delegation', icon: Bot, label: '子 Agent 委派' },
-  { to: '/startup', icon: Power, label: '系统维护' },
   { to: '/settings', icon: Settings2, label: '系统设置' },
 ]
 

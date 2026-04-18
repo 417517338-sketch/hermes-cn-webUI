@@ -44,18 +44,47 @@ function getReleaseDate() {
 
 // Check gateway process status
 function getGatewayState() {
+  const pidFile = join(HERMES_HOME, 'gateway.pid')
   const stateFile = join(HERMES_HOME, 'gateway_state.json')
+
+  // ── Step 1: check gateway.pid (source of truth for running process) ──────
+  try {
+    if (existsSync(pidFile)) {
+      const raw = readFileSync(pidFile, 'utf8').trim()
+      let pid = null
+      try { pid = JSON.parse(raw).pid } catch { pid = parseInt(raw, 10) }
+      if (pid && !isNaN(pid)) {
+        try {
+          process.kill(pid, 0)
+          // Gateway is alive — use gateway_state.json for platform details if available
+          let platforms = {}
+          let gatewayState = 'running'
+          let exitReason = null
+          let updatedAt = null
+          if (existsSync(stateFile)) {
+            try {
+              const s = JSON.parse(readFileSync(stateFile, 'utf8'))
+              platforms = s.platforms || {}
+              gatewayState = s.gateway_state || 'running'
+              exitReason = s.exit_reason || null
+              updatedAt = s.updated_at || null
+            } catch {}
+          }
+          return { running: true, pid, state: gatewayState, exit_reason: exitReason, updated_at: updatedAt, platforms }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  // ── Step 2: fallback to gateway_state.json (may contain last known state) ──
   try {
     if (!existsSync(stateFile)) {
       return { running: false, pid: null, state: 'stopped', exit_reason: null, updated_at: null, platforms: {} }
     }
-    const raw = readFileSync(stateFile, 'utf-8')
+    const raw = readFileSync(stateFile, 'utf8')
     const state = JSON.parse(raw)
     const pid = state.pid ? parseInt(state.pid, 10) : null
-
     if (!pid) return { running: false, pid: null, state: 'stopped', exit_reason: null, updated_at: null, platforms: {} }
-
-    // Check if process is alive
     try {
       process.kill(pid, 0)
       return {
@@ -67,7 +96,6 @@ function getGatewayState() {
         platforms: state.platforms || {},
       }
     } catch {
-      // Process doesn't exist
       return { running: false, pid: null, state: 'stopped', exit_reason: null, updated_at: null, platforms: {} }
     }
   } catch {

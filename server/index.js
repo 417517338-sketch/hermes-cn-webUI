@@ -22,6 +22,7 @@ import modelsRouter from './routes/models.js'
 import { setupTerminalWs } from './ws/terminal.js'
 import { setupLogsWs } from './ws/logs.js'
 import { logsRouter } from './routes/logs.js'
+import { platformsRouter } from './routes/platforms.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -48,6 +49,7 @@ app.use('/api/system', systemRouter)
 app.use('/api/delegation', delegationRouter)
 app.use('/api/logs', logsRouter)
 app.use('/api/models', modelsRouter)
+app.use('/api/platforms', platformsRouter)
 app.use('/api/startup', startupRouter)
 
 // WebSocket endpoints

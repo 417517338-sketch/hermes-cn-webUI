@@ -9,11 +9,13 @@ import { readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { homedir } from 'os'
 import { fileURLToPath } from 'url'
+import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const HERMES_HOME = resolve(homedir(), '.hermes')
 const ENV_PATH = resolve(HERMES_HOME, '.env')
 const CONFIG_PATH = resolve(HERMES_HOME, 'config.yaml')
+const SCRIPT_DIR = resolve(__dirname, '..', '..', '..', 'scripts')
 
 const router = Router()
 
@@ -128,6 +130,29 @@ function getProviderConfig(provider, model) {
 }
 
 /**
+ * 从 credential pool 获取下一个可用 key（通过 Python bridge）
+ * 失败时返回 null
+ */
+function getCredentialFromPool(provider) {
+  try {
+    const scriptPath = resolve(SCRIPT_DIR, 'get_next_credential.py')
+    const output = execSync(`python3 "${scriptPath}" ${provider}`, {
+      timeout: 10000,
+      encoding: 'utf-8',
+    })
+    const result = JSON.parse(output.trim())
+    const cred = result[provider]
+    if (cred && cred.token && cred.token !== '***') {
+      return cred
+    }
+    return null
+  } catch (e) {
+    console.error('getCredentialFromPool error:', e.message)
+    return null
+  }
+}
+
+/**
  * 调用 LLM API
  * @param {string} provider - Provider ID
  * @param {string} model - Model name
@@ -147,23 +172,35 @@ async function callLLMAPI(provider, model, messages, stream = false, options = {
     throw new Error(`无法读取 .env 文件: ${e.message}`)
   }
 
-  const apiKey = envKeys[config.envKey]
-  if (!apiKey) {
-    throw new Error(`${config.envKey} 未设置，请先在设置中配置 API Key`)
-  }
-
-  // 获取 base URL
+  // 优先从 credential pool 获取（支持 key 轮换）
+  let apiKey = ''
   let baseUrl = envKeys[config.baseUrlKey] || config.defaultBaseUrl
 
-  // 读取 config.yaml 覆盖
-  try {
-    const configContent = readFileSync(CONFIG_PATH, 'utf-8')
-    const modelConfig = parseModelConfig(configContent)
-    if (modelConfig.base_url) {
-      baseUrl = modelConfig.base_url.replace(/"/g, '')
+  const poolCred = getCredentialFromPool(provider)
+  if (poolCred) {
+    apiKey = poolCred.token
+    // base_url 仍用 .env/config 的（pool 的 inference_base_url 路径可能不对，如 /anthropic）
+    console.log(`[direct] Using credential pool: label=${poolCred.label}, base_url=${baseUrl}`)
+  } else {
+    // Fallback: 从 .env 读取
+    apiKey = envKeys[config.envKey]
+    if (!apiKey) {
+      throw new Error(`${config.envKey} 未设置，请先在设置中配置 API Key`)
     }
-  } catch (e) {
-    // ignore
+    console.log(`[direct] Using .env fallback: ${config.envKey}`)
+  }
+
+  // 读取 config.yaml 覆盖（仅当没有 pool credential 时）
+  if (!poolCred) {
+    try {
+      const configContent = readFileSync(CONFIG_PATH, 'utf-8')
+      const modelConfig = parseModelConfig(configContent)
+      if (modelConfig.base_url) {
+        baseUrl = modelConfig.base_url.replace(/"/g, '')
+      }
+    } catch (e) {
+      // ignore
+    }
   }
 
   // 构建请求
@@ -399,12 +436,20 @@ router.post('/', async (req, res) => {
 
   } catch (err) {
     console.error('Direct chat error:', err.message)
-    res.status(503).json({
-      error: {
-        message: `LLM API 调用失败: ${err.message}`,
-        type: 'internal_error',
-      },
-    })
+    // 流式模式下 headers 可能已经发送（已发送 thinking 状态）
+    // 此时不能再调 res.status().json()，改为发送 SSE 错误事件
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: `LLM API 调用失败: ${err.message}` })}\n\n`)
+      res.write('data: [DONE]\n\n')
+      res.end()
+    } else {
+      res.status(503).json({
+        error: {
+          message: `LLM API 调用失败: ${err.message}`,
+          type: 'internal_error',
+        },
+      })
+    }
   }
 })
 

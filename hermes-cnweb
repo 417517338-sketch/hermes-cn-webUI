@@ -1,5 +1,8 @@
 #!/bin/bash
-cd "$(dirname "$0")"
+# Resolve symlink to actual script location
+SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+PROJECT_DIR="$(dirname "$SCRIPT_PATH")"
+cd "$PROJECT_DIR"
 
 case "$1" in
 start)

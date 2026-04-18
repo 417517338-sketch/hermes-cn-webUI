@@ -180,9 +180,11 @@ function isPlatformEnabled(platformId) {
   const tokenKey = platformId === 'homeassistant' ? 'ha_url' :
     platformId === 'wecom' ? 'wecom_corp_id' :
     platformId === 'feishu' ? 'feishu_app_id' :
-    platformId === 'weixin' ? 'weixin_app_id' :
+    platformId === 'weixin' ? 'extra.account_id' :  // actual field in config.yaml
     platformId === 'email' ? 'smtp_host' :
     `${platformId}_bot_token`
+  // For weixin the token lives inside pcfg.extra.account_id
+  if (platformId === 'weixin') return !!(pcfg.extra && pcfg.extra.account_id)
   return !!pcfg[tokenKey]
 }
 
@@ -199,7 +201,7 @@ gatewayRouter.get('/', (req, res) => {
   const running = isGatewayRunning()
 
   const platforms = PLATFORM_REGISTRY.map(p => {
-    const pcfg = cfg[p.id] || null
+    const pcfg = platformConfig(p.id)
     const enabled = isPlatformEnabled(p.id)
     // Determine status: running means gateway is alive AND platform has config
     let status = 'offline'
