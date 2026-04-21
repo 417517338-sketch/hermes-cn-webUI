@@ -12,7 +12,8 @@ import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const HERMES_HOME = resolve(homedir(), '.hermes')
+// HERMES_HOME 支持环境变量覆盖（便于 WSL/跨平台场景）
+const HERMES_HOME = process.env.HERMES_HOME || resolve(homedir(), '.hermes')
 const ENV_PATH = resolve(HERMES_HOME, '.env')
 const CONFIG_PATH = resolve(HERMES_HOME, 'config.yaml')
 const SCRIPT_DIR = resolve(__dirname, '..', '..', '..', 'scripts')

@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 /**
- * hermes-cn-webui 跨平台启动脚本
- * 用法: node hermes-cnweb.js [start|stop|restart]
+ * hermes-cnweb - 跨平台启动脚本
+ * 用法：hermes-cnweb [start|stop|restart]
+ * 
+ * 支持的操作系统：
+ * - Windows 10/11 (PowerShell)
+ * - macOS (10.15+)
+ * - Linux (Ubuntu/Debian/CentOS)
  */
 
 import { spawn, execSync } from 'child_process';
@@ -10,14 +15,17 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // 跨平台获取项目目录
 function getProjectDir() {
-  // 方式1: 通过环境变量（全局安装时设置）
+  // 方式 1: 通过环境变量（全局安装时设置）
   if (process.env.HERMES_PROJECT_DIR) {
     return process.env.HERMES_PROJECT_DIR;
   }
   
-  // 方式2: 脚本自身所在目录（symlink 时准确定位）
+  // 方式 2: 脚本自身所在目录（symlink 时准确定位）
   let scriptPath = process.argv[1] ? path.resolve(process.argv[1]) : __filename;
   
   // Windows: 解析 symlink
@@ -87,25 +95,56 @@ function killProcess(name) {
   }
 }
 
+// 显示帮助信息
+function showHelp() {
+  console.log(`
+🚀 hermes-cn-webUI 跨平台启动脚本
+
+用法: hermes-cnweb [start|stop|restart]
+
+命令:
+  start    启动前端和后端服务
+  stop     停止所有运行中的服务
+  restart  重启服务
+
+示例:
+  hermes-cnweb start    # 启动服务
+  hermes-cnweb stop     # 停止服务
+  hermes-cnweb restart  # 重启服务
+
+端口:
+  前端：http://localhost:3000
+  后端：http://localhost:3001
+
+支持的操作系统:
+  ✅ Windows 10/11
+  ✅ macOS (10.15+)
+  ✅ Linux (Ubuntu/Debian/CentOS)
+
+更多文档：https://github.com/417517338-sketch/hermes-cn-webUI/blob/master/CROSS_PLATFORM.md
+`);
+}
+
 // 主函数
 async function main() {
   const projectDir = getProjectDir();
   const action = process.argv[2] || 'start';
   const platformName = os.platform() === 'win32' ? 'Windows' : os.platform() === 'darwin' ? 'macOS' : 'Linux';
   
-  console.log(`\n🚀 hermes-cn-webui 跨平台脚本`);
-  console.log(`📁 项目目录: ${projectDir}`);
-  console.log(`🖥️  平台: ${platformName}\n`);
+  console.log(`\n🚀 hermes-cn-webUI 跨平台脚本`);
+  console.log(`📁 项目目录：${projectDir}`);
+  console.log(`🖥️  平台：${platformName}\n`);
   
   switch (action) {
     case 'start':
       console.log('📦 启动服务...\n');
-      console.log('   前端: http://localhost:3000');
-      console.log('   后端: http://localhost:3001\n');
+      console.log('   前端：http://localhost:3000');
+      console.log('   后端：http://localhost:3001\n');
       
       try {
         startServices(projectDir);
         console.log('✅ 启动完成！\n');
+        console.log('提示：按 Ctrl+C 可退出（仅退出脚本，服务继续运行）\n');
       } catch (err) {
         console.error('❌ 启动失败:', err.message);
         process.exit(1);
@@ -130,14 +169,20 @@ async function main() {
       
     case 'restart':
       console.log('🔄 重启服务...\n');
-      execSync(`"${process.execPath}" "${path.resolve(process.argv[1])}" stop`, { stdio: 'inherit', shell: true });
+      execSync(`${process.execPath} "${path.resolve(process.argv[1])}" stop`, { stdio: 'inherit', shell: true });
       await new Promise(resolve => setTimeout(resolve, 1000));
-      execSync(`"${process.execPath}" "${path.resolve(process.argv[1])}" start`, { stdio: 'inherit', shell: true });
+      execSync(`${process.execPath} "${path.resolve(process.argv[1])}" start`, { stdio: 'inherit', shell: true });
+      break;
+      
+    case 'help':
+    case '--help':
+    case '-h':
+      showHelp();
       break;
       
     default:
-      console.log(`\n用法: node hermes-cnweb.js [start|stop|restart]\n`);
-      console.log(`或者添加到 PATH 后直接运行: hermes-cnweb start\n`);
+      console.log(`\n❌ 未知命令：${action}\n`);
+      showHelp();
       process.exit(1);
   }
 }

@@ -4,7 +4,7 @@
  */
 import { Router } from 'express'
 import { readFileSync } from 'fs'
-import { resolve, dirname } from 'path'
+import { resolve, join, dirname } from 'path'
 import { homedir } from 'os'
 import { fileURLToPath } from 'url'
 import jsyaml from 'js-yaml'
@@ -12,7 +12,9 @@ import jsyaml from 'js-yaml'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const router = Router()
 
-const CONFIG_PATH = resolve(homedir(), '.hermes', 'config.yaml')
+// HERMES_HOME 支持环境变量覆盖（便于 WSL/跨平台场景）
+const HERMES_HOME = process.env.HERMES_HOME || join(process.env.HOME || homedir(), '.hermes')
+const CONFIG_PATH = join(HERMES_HOME, 'config.yaml')
 
 /**
  * 常用模型列表（用于快速选择）

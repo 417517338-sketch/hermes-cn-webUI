@@ -7,12 +7,31 @@ import { Router } from 'express'
 import { spawn, execSync } from 'child_process'
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import { homedir } from 'os'
+import { homedir, platform } from 'os'
 
 export const startupRouter = Router()
 
-const HERMES_HOME = join(homedir(), '.hermes')
+// HERMES_HOME 支持环境变量覆盖（便于 WSL/跨平台场景）
+const HERMES_HOME = process.env.HERMES_HOME || join(homedir(), '.hermes')
 const GATEWAY_PID_FILE = join(HERMES_HOME, 'gateway.pid')
+
+// ---------------------------------------------------------------------------
+// 跨平台辅助
+// ---------------------------------------------------------------------------
+
+/** 同步 sleep */
+function sleepSync(ms) {
+  const end = Date.now() + ms
+  while (Date.now() < end) { /* spin */ }
+}
+
+/** 获取 Hermes venv 中的 python 可执行文件路径 */
+function getHermesPython() {
+  const venvBase = join(HERMES_HOME, 'hermes-agent', 'venv')
+  return platform() === 'win32'
+    ? join(venvBase, 'Scripts', 'python.exe')
+    : join(venvBase, 'bin', 'python')
+}
 
 // ─── Banner helpers (check_for_updates) ──────────────────────────────────────
 
@@ -21,7 +40,7 @@ const GATEWAY_PID_FILE = join(HERMES_HOME, 'gateway.pid')
  * Returns null on failure (非 git 安装或离线).
  */
 function checkAgentUpdates() {
-  const python = join(HERMES_HOME, 'hermes-agent', 'venv', 'bin', 'python')
+  const python = getHermesPython()
   const scriptPath = '/tmp/hermes_check_updates.py'
   const scriptContent = [
     'import sys',
@@ -45,8 +64,6 @@ function checkAgentUpdates() {
     return null
   }
 }
-
-// ─── Gateway 状态 ────────────────────────────────────────────────────────────
 
 function getGatewayPid() {
   try {
@@ -77,18 +94,31 @@ function startGateway() {
     const stall = Date.now()
     while (Date.now() - stall < 5000) {
       if (!isGatewayRunning()) break
-      execSync('sleep 0.5')
+      sleepSync(500)
     }
   }
 
-  const python = join(HERMES_HOME, 'hermes-agent', 'venv', 'bin', 'python')
-  const shellCmd = `exec "${python}" -m hermes_cli.main gateway run --replace`
-  const proc = spawn('sh', ['-c', shellCmd], {
-    cwd: HERMES_HOME,
-    env: { ...process.env, HERMES_HOME },
-    detached: true,
-    stdio: 'ignore',
-  })
+  const python = getHermesPython()
+  const isWin = platform() === 'win32'
+
+  let proc
+  if (isWin) {
+    const psCmd = `Start-Process -FilePath "${python}" -ArgumentList '-m','hermes_cli.main','gateway','run','--replace' -NoNewWindow -PassThru | Select-Object -ExpandProperty Id`
+    proc = spawn('powershell', ['-Command', psCmd], {
+      cwd: HERMES_HOME,
+      env: { ...process.env, HERMES_HOME },
+      detached: true,
+      stdio: 'ignore',
+    })
+  } else {
+    const shellCmd = `exec "${python}" -m hermes_cli.main gateway run --replace`
+    proc = spawn('sh', ['-c', shellCmd], {
+      cwd: HERMES_HOME,
+      env: { ...process.env, HERMES_HOME },
+      detached: true,
+      stdio: 'ignore',
+    })
+  }
 
   proc.unref()
 
@@ -126,7 +156,7 @@ function stopGateway() {
   while (Date.now() < deadline) {
     try {
       process.kill(pid, 0) // 测试进程是否还在
-      execSync('sleep 0.3')
+      sleepSync(300)
     } catch {
       // 进程已退出
       try { unlinkSync(GATEWAY_PID_FILE) } catch {}
@@ -182,7 +212,7 @@ startupRouter.post('/restart', (req, res) => {
   const stall = Date.now()
   while (Date.now() - stall < 3000) {
     if (!isGatewayRunning()) break
-    execSync('sleep 0.3')
+    sleepSync(300)
   }
   const result = startGateway()
   if (!result.success) {
@@ -246,14 +276,27 @@ startupRouter.post('/check-update', (req, res) => {
 // POST /api/startup/do-update
 startupRouter.post('/do-update', (req, res) => {
   // 启动更新进程（异步，不阻塞响应）
-  const python = join(HERMES_HOME, 'hermes-agent', 'venv', 'bin', 'python')
-  const updateCmd = `exec "${python}" -m hermes_cli.main update`
-  const proc = spawn('sh', ['-c', updateCmd], {
-    cwd: HERMES_HOME,
-    env: { ...process.env, HERMES_HOME },
-    detached: true,
-    stdio: 'ignore',
-  })
+  const python = getHermesPython()
+  const isWin = platform() === 'win32'
+
+  let proc
+  if (isWin) {
+    const psCmd = `Start-Process -FilePath "${python}" -ArgumentList '-m','hermes_cli.main','update' -NoNewWindow -PassThru | Select-Object -ExpandProperty Id`
+    proc = spawn('powershell', ['-Command', psCmd], {
+      cwd: HERMES_HOME,
+      env: { ...process.env, HERMES_HOME },
+      detached: true,
+      stdio: 'ignore',
+    })
+  } else {
+    const updateCmd = `exec "${python}" -m hermes_cli.main update`
+    proc = spawn('sh', ['-c', updateCmd], {
+      cwd: HERMES_HOME,
+      env: { ...process.env, HERMES_HOME },
+      detached: true,
+      stdio: 'ignore',
+    })
+  }
   proc.unref()
 
   return res.json({ message: '更新进程已在后台启动，Gateway 将自动重启' })

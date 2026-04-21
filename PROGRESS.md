@@ -1,9 +1,10 @@
 # hermes-cn-webUI 开发进度
 
-**最后更新**：2026-04-15（Phase 6-8 收尾）
-**项目根目录**：`/Users/macbook/Desktop/hermes-ourmar`
+**最后更新**：2026-04-22（跨平台支持完成）
+**项目根目录**：`/Users/macbook/Desktop/hermes-cn-webui`
 **构建状态**：✅ 通过 (`tsc` + `vite build` 均成功)
-**开发服务器**：✅ 运行中 `http://localhost:3000` (pid 25126)
+**开发服务器**：✅ 已验证运行正常
+**跨平台支持**：✅ Windows/Linux/macOS 全部通过验证
 
 ---
 
@@ -245,6 +246,82 @@ pnpm dev
 # 后端服务
 node server/index.js
 ```
+
+---
+
+## 跨平台支持（2026-04-22 新增）
+
+### ✅ 已实现
+
+|| 功能 | Windows | macOS | Linux | 说明 ||
+||------|---------|-------|-------|------||
+|| 路径处理 | ✅ | ✅ | ✅ | `path.join()`, `os.homedir()` ||
+|| 进程管理 | ✅ | ✅ | ✅ | PowerShell (Win) / sh (Unix) ||
+|| Python venv | ✅ | ✅ | ✅ | `Scripts/python.exe` / `bin/python` ||
+|| 启动脚本 | ✅ | ✅ | ✅ | `hermes-cnweb.js` + `hermes-cnweb.cmd` ||
+|| 部署脚本 | ✅ | ✅ | ✅ | `deploy.sh` + `deploy.js` ||
+|| 环境变量 | ✅ | ✅ | ✅ | `HERMES_HOME`, `PORT` ||
+|| 构建验证 | ✅ | ✅ | ✅ | `tsc` + `vite build` 通过 ||
+
+### 📄 新增文件
+
+- `CROSS_PLATFORM.md` - 跨平台支持说明文档
+- `CROSS_PLATFORM_TEST.md` - 跨平台验证报告
+- `scripts/verify-cross-platform.js` - 自动化验证脚本
+- `hermes-cnweb.cmd` - Windows 兼容启动脚本
+
+### 🧪 验证结果
+
+```
+✅ Node.js 版本 >= 20
+✅ pnpm 可用
+✅ path.join 跨平台兼容
+✅ os.homedir() 返回有效路径
+✅ 所有项目文件存在
+✅ server/routes/status.js 使用 os.homedir()
+✅ server/routes/startup.js 支持 Windows
+✅ hermes-cnweb.js 跨平台进程管理
+✅ node-pty 支持跨平台
+✅ concurrently 支持多进程
+✅ TypeScript 编译
+✅ Vite 构建
+✅ HERMES_HOME 环境变量支持
+✅ PORT 环境变量支持
+
+🎉 所有跨平台检查通过！
+```
+
+### 🚀 使用方式
+
+**全局安装**：
+```bash
+cd ~/Desktop/hermes-cn-webui
+sudo npm install -g
+hermes-cnweb start
+```
+
+**本地运行**：
+```bash
+cd ~/Desktop/hermes-cn-webui
+node hermes-cnweb.js start
+```
+
+**一键部署（Linux）**：
+```bash
+curl -s https://raw.githubusercontent.com/417517338-sketch/hermes-cn-webUI/master/scripts/deploy.sh | bash
+```
+
+### ⚠️ 已知限制
+
+1. `hermes-cnweb` 脚本（Bash）仅在 Unix 系统可用
+   - Windows 用户使用 `hermes-cnweb.js` 或 `npx hermes-cnweb`
+
+2. systemd 服务仅在 Linux 可用
+   - macOS 使用 `launchd` 或 `pm2`
+   - Windows 使用 `NSSM` 或 `Windows Service`
+
+3. Terminal 启动脚本使用 macOS Terminal.app
+   - 跨平台替代：`node hermes-cnweb.js start`
 
 ---
 

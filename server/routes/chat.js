@@ -8,18 +8,25 @@ import { Router } from 'express'
 import { spawn } from 'child_process'
 import { readFileSync } from 'fs'
 import { join, resolve, dirname } from 'path'
-import { homedir } from 'os'
+import { homedir, platform } from 'os'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const router = Router()
 
-// Hermes Agent CLI 路径
-const HERMES_AGENT_CLI = resolve(homedir(), '.hermes', 'hermes-agent', 'cli.py')
-const HERMES_HOME = join(homedir(), '.hermes')
-// 使用 venv 中的 Python（hermes-agent 依赖都在 venv 中）
-const HERMES_PYTHON = resolve(homedir(), '.hermes', 'hermes-agent', 'venv', 'bin', 'python3')
+// HERMES_HOME 支持环境变量覆盖（便于 WSL/跨平台场景）
+const HERMES_HOME = process.env.HERMES_HOME || join(homedir(), '.hermes')
+const HERMES_AGENT_CLI = resolve(HERMES_HOME, 'hermes-agent', 'cli.py')
+
+// 使用 venv 中的 Python（hermes-agent 依赖都在 venv 中），跨平台路径
+function getHermesPython() {
+  const venvBase = join(HERMES_HOME, 'hermes-agent', 'venv')
+  return platform() === 'win32'
+    ? join(venvBase, 'Scripts', 'python.exe')
+    : join(venvBase, 'bin', 'python3')
+}
+const HERMES_PYTHON = getHermesPython()
 
 /**
  * 从 CLI stdout 输出中解析响应文本

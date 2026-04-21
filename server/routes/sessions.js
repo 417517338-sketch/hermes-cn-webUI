@@ -1,11 +1,11 @@
 import { Router } from 'express'
 import Database from 'better-sqlite3'
-import { homedir } from 'os'
 import { join } from 'path'
+import { homedir } from 'os'
 
-export const sessionsRouter = Router()
-
-const DB_PATH = join(homedir(), '.hermes', 'state.db')
+// HERMES_HOME 支持环境变量覆盖（便于 WSL/跨平台场景）
+const HERMES_HOME = process.env.HERMES_HOME || join(homedir(), '.hermes')
+const DB_PATH = join(HERMES_HOME, 'state.db')
 
 function getDb() {
   return new Database(DB_PATH, { readonly: true })

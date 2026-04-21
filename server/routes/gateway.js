@@ -8,14 +8,37 @@ import { Router } from 'express'
 import { spawn, execSync } from 'child_process'
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
 import { join, dirname } from 'path'
-import { homedir } from 'os'
+import { homedir, platform } from 'os'
 import jsyaml from 'js-yaml'
 
 export const gatewayRouter = Router()
 
-const HERMES_HOME = join(homedir(), '.hermes')
+const HERMES_HOME = process.env.HERMES_HOME || join(homedir(), '.hermes')
 const GATEWAY_PID_FILE = join(HERMES_HOME, 'gateway.pid')
 const CONFIG_FILE = join(HERMES_HOME, 'config.yaml')
+
+// ---------------------------------------------------------------------------
+// 跨平台辅助函数
+// ---------------------------------------------------------------------------
+
+/** 跨平台 sleep（Windows 无 sleep 命令） */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/** 跨平台同步 sleep */
+function sleepSync(ms) {
+  const end = Date.now() + ms
+  while (Date.now() < end) { /* spin */ }
+}
+
+/** 获取 Hermes Agent venv 中的 python 可执行文件路径 */
+function getHermesPython() {
+  const venvBase = join(HERMES_HOME, 'hermes-agent', 'venv')
+  return platform() === 'win32'
+    ? join(venvBase, 'Scripts', 'python.exe')
+    : join(venvBase, 'bin', 'python')
+}
 
 // 已知平台列表（与 Hermes Agent gateway 对齐）
 const PLATFORM_REGISTRY = [
@@ -91,20 +114,34 @@ function startGateway() {
     const stall = Date.now()
     while (Date.now() - stall < 5000) {
       if (!isGatewayRunning()) break
-      require('child_process').execSync('sleep 0.5')
+      sleepSync(500)
     }
   }
 
-  const python = join(HERMES_HOME, 'hermes-agent', 'venv', 'bin', 'python')
-  // Use a shell wrapper to properly daemonize on macOS/Unix.
-  // The shell runs in the background so Node can exit immediately.
-  const shellCmd = `exec "${python}" -m hermes_cli.main gateway run --replace`
-  const proc = spawn('sh', ['-c', shellCmd], {
-    cwd: HERMES_HOME,
-    env: { ...process.env, HERMES_HOME },
-    detached: true,
-    stdio: 'ignore',
-  })
+  const python = getHermesPython()
+  const isWin = platform() === 'win32'
+
+  let proc
+  if (isWin) {
+    // Windows: use PowerShell Start-Process to fork a truly detached process
+    // that survives after Node exits. -NoNewWindow keeps it in the background.
+    const psCmd = `Start-Process -FilePath "${python}" -ArgumentList '-m','hermes_cli.main','gateway','run','--replace' -NoNewWindow -PassThru | Select-Object -ExpandProperty Id`
+    proc = spawn('powershell', ['-Command', psCmd], {
+      cwd: HERMES_HOME,
+      env: { ...process.env, HERMES_HOME },
+      detached: true,
+      stdio: 'ignore',
+    })
+  } else {
+    // Unix: shell wrapper detaches python from Node's process tree.
+    const shellCmd = `exec "${python}" -m hermes_cli.main gateway run --replace`
+    proc = spawn('sh', ['-c', shellCmd], {
+      cwd: HERMES_HOME,
+      env: { ...process.env, HERMES_HOME },
+      detached: true,
+      stdio: 'ignore',
+    })
+  }
 
   proc.unref()
 
@@ -150,7 +187,7 @@ function restartGateway() {
   const stall = Date.now()
   while (Date.now() - stall < 3000) {
     if (!isGatewayRunning()) break
-    require('child_process').execSync('sleep 0.3')
+    sleepSync(300)
   }
   const result = startGateway()
   if (!result.success) {

@@ -7,7 +7,7 @@
 import { Router } from 'express'
 import { spawn } from 'child_process'
 import { join } from 'path'
-import { homedir } from 'os'
+import { homedir, platform } from 'os'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 
 export const delegationRouter = Router()
@@ -16,10 +16,19 @@ export const delegationRouter = Router()
 // Paths
 // ---------------------------------------------------------------------------
 
-const HERMES_HOME = join(homedir(), '.hermes')
+// HERMES_HOME 支持环境变量覆盖（便于 WSL/跨平台场景）
+const HERMES_HOME = process.env.HERMES_HOME || join(homedir(), '.hermes')
 const TASKS_FILE = join(HERMES_HOME, 'delegation_tasks.json')
 const HERMES_AGENT_CLI = join(HERMES_HOME, 'hermes-agent', 'cli.py')
-const HERMES_PYTHON = join(homedir(), '.hermes', 'hermes-agent', 'venv', 'bin', 'python3')
+
+// 跨平台 venv python 路径
+function getHermesPython() {
+  const venvBase = join(HERMES_HOME, 'hermes-agent', 'venv')
+  return platform() === 'win32'
+    ? join(venvBase, 'Scripts', 'python.exe')
+    : join(venvBase, 'bin', 'python3')
+}
+const HERMES_PYTHON = getHermesPython()
 
 // ---------------------------------------------------------------------------
 // Sub-agents configuration

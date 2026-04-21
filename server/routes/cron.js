@@ -13,7 +13,7 @@ import { Router } from 'express'
 import cron from 'node-cron'
 import { spawn } from 'child_process'
 import { join, dirname } from 'path'
-import { homedir } from 'os'
+import { homedir, platform } from 'os'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 
@@ -25,9 +25,13 @@ export const cronRouter = Router()
 // 常量 & 路径
 // ---------------------------------------------------------------------------
 
-const HERMES_HOME = join(homedir(), '.hermes')
+const HERMES_HOME = process.env.HERMES_HOME || join(homedir(), '.hermes')
 const HERMES_AGENT_CLI = join(HERMES_HOME, 'hermes-agent', 'cli.py')
-const HERMES_PYTHON = join(HERMES_HOME, 'hermes-agent', 'venv', 'bin', 'python')
+// 跨平台 venv python 路径：Unix 用 venv/bin/python，Windows 用 venv/Scripts/python.exe
+const _venvBase = join(HERMES_HOME, 'hermes-agent', 'venv')
+const HERMES_PYTHON = platform() === 'win32'
+  ? join(_venvBase, 'Scripts', 'python.exe')
+  : join(_venvBase, 'bin', 'python')
 const CRON_HISTORY_DIR = join(HERMES_HOME, 'cron_history')
 const CRON_JOBS_FILE = join(HERMES_HOME, 'cron_jobs.json')
 
