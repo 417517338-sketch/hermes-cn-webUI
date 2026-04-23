@@ -27,6 +27,17 @@ import { platformsRouter } from './routes/platforms.js'
 const app = express()
 const PORT = process.env.PORT || 3001
 
+// 防止未捕获的同步异常导致整个进程崩溃
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err.message)
+  console.error(err.stack)
+})
+
+// 防止未处理的 Promise 拒绝导致进程崩溃
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] Unhandled rejection at:', promise, 'reason:', reason)
+})
+
 app.use(cors())
 app.use(express.json())
 
@@ -61,4 +72,10 @@ setupLogsWs(server)
 
 server.listen(PORT, () => {
   console.log(`Hermes WebUI server running on http://localhost:${PORT}`)
+}).on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[FATAL] Port ${PORT} is already in use`)
+  } else {
+    console.error('[FATAL] Server error:', err.message)
+  }
 })

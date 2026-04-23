@@ -5,10 +5,41 @@ import { join } from 'path'
 export const skillsRouter = Router()
 
 const SKILLS_DIR = join(process.env.HOME || '', '.hermes', 'skills')
+const SKILLS_CONFIG = join(process.env.HOME || '', '.hermes', 'skills-config.json')
 
-function parseSkillFile(name, filePath) {
+// Load enabled/disabled state from config file
+function loadSkillsConfig() {
   try {
-    const stat = statSync(filePath)
+    if (existsSync(SKILLS_CONFIG)) {
+      return JSON.parse(readFileSync(SKILLS_CONFIG, 'utf-8'))
+    }
+  } catch {}
+  return {}
+}
+
+// Save enabled/disabled state to config file
+function saveSkillsConfig(config) {
+  try {
+    const dir = join(process.env.HOME || '', '.hermes')
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+    writeFileSync(SKILLS_CONFIG, JSON.stringify(config, null, 2), 'utf-8')
+  } catch (err) {
+    console.error('Failed to save skills config:', err)
+  }
+}
+
+// Get enabled state for a skill
+function isSkillEnabled(skillName, config) {
+  if (config[skillName] === undefined) {
+    return true
+  }
+  return config[skillName] === true
+}
+
+function parseSkillFile(name, filePath, config) {
+  try {
     const content = readFileSync(filePath, 'utf-8')
 
     // Extract category from frontmatter
@@ -27,13 +58,15 @@ function parseSkillFile(name, filePath) {
     }
 
     return {
+      id: name,
       name,
       description,
       category,
-      enabled: true, // Skills are file-based; all discovered skills are considered "enabled"
+      enabled: isSkillEnabled(name, config),
     }
   } catch {
     return {
+      id: name,
       name,
       description: '',
       category: 'custom',
@@ -43,6 +76,7 @@ function parseSkillFile(name, filePath) {
 }
 
 function listSkillsFromDisk(search, category) {
+  const config = loadSkillsConfig()
   if (!existsSync(SKILLS_DIR)) return []
 
   const skills = []
@@ -67,15 +101,12 @@ function listSkillsFromDisk(search, category) {
       if (stat.isDirectory()) {
         const skillMd = join(fullPath, 'SKILL.md')
         if (existsSync(skillMd)) {
-          // This directory is a skill (e.g. apple-notes, github-pr-workflow)
-          const skill = parseSkillFile(entry, skillMd)
-          // Use parent category as fallback if skill has no category
+          const skill = parseSkillFile(entry, skillMd, config)
           if (!skill.category || skill.category === 'custom') {
             skill.category = parentCategory || 'custom'
           }
           skills.push(skill)
         } else {
-          // Recurse into subdirectory (category folder)
           scanDir(fullPath, entry)
         }
       }
@@ -106,14 +137,20 @@ skillsRouter.get('/', (req, res) => {
   res.json(skills)
 })
 
-// PUT /api/skills/toggle — enable/disable a skill
-skillsRouter.put('/toggle', (req, res) => {
-  const { name, enabled } = req.body
-  if (!name) return res.status(400).json({ error: 'name is required' })
+// PUT /api/skills/:id — enable/disable a skill
+skillsRouter.put('/:id', (req, res) => {
+  const { id } = req.params
+  const { enabled } = req.body
 
-  // Skills are file-based; runtime toggle is acknowledged but not persisted
-  // In a real implementation this would update config.yaml or a skills.json
-  res.json({ ok: true })
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be a boolean' })
+  }
+
+  const config = loadSkillsConfig()
+  config[id] = enabled
+  saveSkillsConfig(config)
+
+  res.json({ id, enabled, ok: true })
 })
 
 // POST /api/skills/import — import a skill from content
@@ -136,6 +173,7 @@ skillsRouter.post('/import', (req, res) => {
   }
 
   const skill = {
+    id: name,
     name,
     description: content.slice(0, 200).replace(/[#*`\n]/g, '').trim(),
     category,

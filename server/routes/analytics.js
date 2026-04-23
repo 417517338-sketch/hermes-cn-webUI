@@ -18,6 +18,8 @@ function calcCost(tokens) {
   return (tokens / 1_000_000) * COST_PER_MILLION
 }
 
+const analyticsRouter = Router()
+
 // GET /api/analytics/usage?days=30
 analyticsRouter.get('/usage', (req, res) => {
   try {
@@ -121,3 +123,5 @@ analyticsRouter.get('/usage', (req, res) => {
     res.status(500).json({ error: 'Failed to fetch analytics', details: err.message })
   }
 })
+
+export { analyticsRouter }

@@ -29,6 +29,8 @@ function mapSession(row) {
   }
 }
 
+const sessionsRouter = Router()
+
 // GET /api/sessions?limit=20&offset=0&search=xxx
 sessionsRouter.get('/', (req, res) => {
   try {
@@ -218,3 +220,5 @@ sessionsRouter.delete('/:id', (req, res) => {
     res.status(500).json({ error: 'Failed to delete session', details: err.message })
   }
 })
+
+export { sessionsRouter }
